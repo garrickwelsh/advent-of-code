@@ -25,6 +25,10 @@ mod test {
     fn total_calories_top_3_elves_carrying_confirm() {
         assert_eq!(45000, total_calories_of_top_x_elves(TEST_INPUT, 3));
     }
+    #[test]
+    fn total_calories_top_1_elves_carrying_confirm() {
+        assert_eq!(24000, total_calories_of_top_x_elves(TEST_INPUT, 1));
+    }
 }
 
 fn total_calories_elf_carrying(input: &str) -> u32 {
