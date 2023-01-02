@@ -9,7 +9,10 @@ C Z";
     #[test]
     fn win_lose_score_test() {
         let lines = INPUT.split("\n");
-        assert_eq!(15u32, lines.map(|l| rock_paper_scissors_play_game(l)).sum())
+        assert_eq!(
+            15u32,
+            lines.map(|l| rock_paper_scissors_play_game_part1(l)).sum()
+        )
     }
 
     #[test]
@@ -25,14 +28,28 @@ C Z";
             rock_paper_scissors_get_characters(line)
         );
     }
+
+    #[test]
+    fn rock_paper_scissors_test_part2() {
+        let lines = INPUT.split("\n");
+        assert_eq!(
+            12u32,
+            lines.map(|l| rock_paper_scissors_play_game_part2(l)).sum()
+        )
+    }
 }
 
 const ROCK: char = 'r';
 const PAPER: char = 'p';
 const SCISSORS: char = 's';
 
-fn rock_paper_scissors_play_game(line_input: &str) -> u32 {
+fn rock_paper_scissors_play_game_part1(line_input: &str) -> u32 {
     rock_paper_scissors_score_game(rock_paper_scissors_get_characters(line_input))
+}
+fn rock_paper_scissors_play_game_part2(line_input: &str) -> u32 {
+    let (elf_chose, score) = rock_paper_scissors_get_characters_encoded(line_input);
+    let you_choose = calculate_rock_paper_scissors(elf_chose, score);
+    rock_paper_scissors_score_game((elf_chose, you_choose))
 }
 
 fn rock_paper_scissors_score_game(game: (char, char)) -> u32 {
@@ -84,6 +101,51 @@ fn rock_paper_scissors_get_characters(line_input: &str) -> (char, char) {
     };
     (elf_chose, me_chose)
 }
+fn rock_paper_scissors_get_characters_encoded(line_input: &str) -> (char, u32) {
+    use nom::character::complete::anychar;
+    use nom::character::complete::one_of;
+    let (remaining, elf_chose) =
+        one_of::<_, _, (&str, nom::error::ErrorKind)>("ABC")(line_input).unwrap();
+    let (remaining, _) = anychar::<_, (&str, nom::error::ErrorKind)>(remaining).unwrap();
+    let (_, me_chose) = one_of::<_, _, (&str, nom::error::ErrorKind)>("XYZ")(remaining).unwrap();
+    let elf_chose = match elf_chose {
+        'A' => ROCK,
+        'B' => PAPER,
+        'C' => SCISSORS,
+        _ => panic!(),
+    };
+    let me_chose = match me_chose {
+        'X' => 0,
+        'Y' => 3,
+        'Z' => 6,
+        _ => panic!(),
+    };
+    (elf_chose, me_chose)
+}
+
+fn calculate_rock_paper_scissors(elf_chose: char, outcome: u32) -> char {
+    match elf_chose {
+        ROCK => match outcome {
+            0 => SCISSORS,
+            3 => ROCK,
+            6 => PAPER,
+            _ => panic!(),
+        },
+        PAPER => match outcome {
+            0 => ROCK,
+            3 => PAPER,
+            6 => SCISSORS,
+            _ => panic!(),
+        },
+        SCISSORS => match outcome {
+            0 => PAPER,
+            3 => SCISSORS,
+            6 => ROCK,
+            _ => panic!(),
+        },
+        _ => panic!(),
+    }
+}
 
 fn main() -> std::io::Result<()> {
     use std::fs::File;
@@ -97,7 +159,15 @@ fn main() -> std::io::Result<()> {
     println!(
         "{}",
         lines
-            .map(|l| rock_paper_scissors_play_game(&l.unwrap()))
+            .map(|l| rock_paper_scissors_play_game_part1(&l.unwrap()))
+            .sum::<u32>()
+    );
+    let file = File::open(&path)?;
+    let lines = io::BufReader::new(file).lines();
+    println!(
+        "{}",
+        lines
+            .map(|l| rock_paper_scissors_play_game_part2(&l.unwrap()))
             .sum::<u32>()
     );
     Ok(())
