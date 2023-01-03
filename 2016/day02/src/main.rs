@@ -11,10 +11,10 @@ mod test {
         const LINE3: &str = "LURDL";
         const LINE4: &str = "UUUUD";
 
-        given_moves_then(LINE1.chars(), 1);
-        given_moves_with_previous_value_then(LINE2.chars(), 1, 9);
-        given_moves_with_previous_value_then(LINE3.chars(), 9, 8);
-        given_moves_with_previous_value_then(LINE4.chars(), 8, 5);
+        given_keypad1_moves_with_starting_location_then(LINE1.chars(), 1, 1, '1');
+        given_keypad1_moves_with_starting_location_then(LINE2.chars(), 0, 0, '9');
+        given_keypad1_moves_with_starting_location_then(LINE3.chars(), 2, 2, '8');
+        given_keypad1_moves_with_starting_location_then(LINE4.chars(), 1, 2, '5');
     }
 
     #[test]
@@ -30,10 +30,6 @@ mod test {
         given_keypad2_moves_with_starting_location(LINE4.chars(), 2, 3, '3');
     }
 
-    fn given_moves_then(moves: Chars, expected_keypad_value: u32) {
-        assert_eq!(expected_keypad_value, calculate_code(moves));
-    }
-
     fn given_keypad2_moves_with_starting_location(
         moves: Chars,
         x: usize,
@@ -46,31 +42,20 @@ mod test {
         );
     }
 
-    fn given_moves_with_previous_value_then(
+    fn given_keypad1_moves_with_starting_location_then(
         moves: Chars,
-        previous_keypad_value: u32,
-        expected_keypad_value: u32,
+        x: usize,
+        y: usize,
+        expected_keypad_value: char,
     ) {
         assert_eq!(
             expected_keypad_value,
-            calculate_code_with_previous_keypad_value(moves, previous_keypad_value)
+            calculate_code_with_starting_location(moves, x, y).keypad_value
         );
     }
 }
 
-const KEYPAD: [[u32; 3]; 3] = [[1u32, 2u32, 3u32], [4u32, 5u32, 6u32], [7u32, 8u32, 9u32]];
-const KEYPAD_LOOKUP: [(usize, usize); 10] = [
-    (10, 10),
-    (0, 0),
-    (1, 0),
-    (2, 0),
-    (0, 1),
-    (1, 1),
-    (2, 1),
-    (0, 2),
-    (1, 2),
-    (2, 2),
-];
+const KEYPAD: [[char; 3]; 3] = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']];
 
 const KEYPAD2: [[Option<char>; 5]; 5] = [
     [None, None, Some('1'), None, None],
@@ -137,11 +122,8 @@ fn calculate2_code_with_starting_location(moves: Chars, x: usize, y: usize) -> K
     }
 }
 
-fn calculate_code(moves: Chars) -> u32 {
-    calculate_code_with_previous_keypad_value(moves, 5u32)
-}
-fn calculate_code_with_previous_keypad_value(moves: Chars, keypad_value: u32) -> u32 {
-    let (mut x, mut y): (usize, usize) = KEYPAD_LOOKUP[keypad_value as usize];
+fn calculate_code_with_starting_location(moves: Chars, x: usize, y: usize) -> Keypad2Result {
+    let (mut x, mut y): (usize, usize) = (x, y);
     for c in moves {
         match c {
             'U' => y = if y == 0 { 0 } else { y - 1 },
@@ -151,7 +133,11 @@ fn calculate_code_with_previous_keypad_value(moves: Chars, keypad_value: u32) ->
             _ => panic!(),
         };
     }
-    KEYPAD[y][x]
+    Keypad2Result {
+        x,
+        y,
+        keypad_value: KEYPAD[y][x],
+    }
 }
 
 fn main() {
@@ -163,14 +149,21 @@ fn main() {
     let path = Path::new("input.txt");
     let file = File::open(&path).unwrap();
     let lines = io::BufReader::new(file).lines();
-    let mut previous_keypad_value = 5u32;
+    let mut previous_keypad_result = Keypad2Result {
+        x: 1usize,
+        y: 1usize,
+        keypad_value: ' ',
+    };
     let mut output = String::new();
     for line in lines {
         let line = line.unwrap();
-        let keypad_value =
-            calculate_code_with_previous_keypad_value(line.chars(), previous_keypad_value);
-        output.push_str(&keypad_value.to_string());
-        previous_keypad_value = keypad_value;
+        let keypad_result = calculate_code_with_starting_location(
+            line.chars(),
+            previous_keypad_result.x,
+            previous_keypad_result.y,
+        );
+        output.push(keypad_result.keypad_value);
+        previous_keypad_result = keypad_result;
     }
     println!("{}", output);
 
