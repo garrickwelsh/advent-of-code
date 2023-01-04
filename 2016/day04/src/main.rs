@@ -24,6 +24,14 @@ mod test {
         line_parse_test_impl(LINE4, false);
     }
 
+    #[test]
+    fn shift_ciper_test() {
+        let input = "qzmt-zixmtkozy-ivhz";
+        let sector_id: u32 = 343;
+        let expected = "very-encrypted-name";
+        assert_eq!(expected, simple_map(input, sector_id));
+    }
+
     fn line_parse_test_impl(line: &str, valid: bool) {
         dbg!(get_record_valid_and_sector(line).unwrap());
         assert_eq!(valid, get_record_valid_and_sector(line).unwrap().1.valid);
@@ -118,15 +126,94 @@ fn get_record_valid_and_sector(line: &str) -> nom::IResult<&str, RecordValid> {
         },
     ))
 }
+
+fn simple_map(line: &str, rotate: u32) -> String {
+    let rotate = rotate % 26;
+    let mut retval = String::with_capacity(line.len());
+    for c in line.chars() {
+        let mut m = c;
+        for _ in 0..rotate {
+            m = match m {
+                'a' => 'b',
+                'b' => 'c',
+                'c' => 'd',
+                'd' => 'e',
+                'e' => 'f',
+                'f' => 'g',
+                'g' => 'h',
+                'h' => 'i',
+                'i' => 'j',
+                'j' => 'k',
+                'k' => 'l',
+                'l' => 'm',
+                'm' => 'n',
+                'n' => 'o',
+                'o' => 'p',
+                'p' => 'q',
+                'q' => 'r',
+                'r' => 's',
+                's' => 't',
+                't' => 'u',
+                'u' => 'v',
+                'v' => 'w',
+                'w' => 'x',
+                'x' => 'y',
+                'y' => 'z',
+                'z' => 'a',
+                _ => m,
+            };
+        }
+        retval.push(m);
+    }
+    retval
+}
+
 fn main() {
-    const LINE1: &str = "aaaaa-bbb-z-y-x-123[abxyz]";
-    const LINE2: &str = "a-b-c-d-e-f-g-h-987[abcde]";
-    const LINE3: &str = "not-a-real-room-404[oarel]";
-    const LINE4: &str = "totally-real-room-200[decoy]";
-    println!("{:?}", get_record_valid_and_sector(LINE1).unwrap().1);
-    println!("{:?}", get_record_valid_and_sector(LINE2).unwrap().1);
-    println!("{:?}", get_record_valid_and_sector(LINE3).unwrap().1);
-    println!("{:?}", get_record_valid_and_sector(LINE4).unwrap().1);
-    const LINES: [&str; 4] = [LINE1, LINE2, LINE3, LINE4];
-    print_records(&LINES).unwrap();
+    use std::fs::File;
+    use std::io;
+    use std::io::prelude::*;
+    use std::path::Path;
+
+    // Check out against unit test data
+    // const LINE1: &str = "aaaaa-bbb-z-y-x-123[abxyz]";
+    // const LINE2: &str = "a-b-c-d-e-f-g-h-987[abcde]";
+    // const LINE3: &str = "not-a-real-room-404[oarel]";
+    // const LINE4: &str = "totally-real-room-200[decoy]";
+    // println!("{:?}", get_record_valid_and_sector(LINE1).unwrap().1);
+    // println!("{:?}", get_record_valid_and_sector(LINE2).unwrap().1);
+    // println!("{:?}", get_record_valid_and_sector(LINE3).unwrap().1);
+    // println!("{:?}", get_record_valid_and_sector(LINE4).unwrap().1);
+    // const LINES: [&str; 4] = [LINE1, LINE2, LINE3, LINE4];
+    // print_records(&LINES).unwrap();
+
+    let path = Path::new("input.txt");
+    let file = File::open(&path).unwrap();
+    let lines = io::BufReader::new(file).lines();
+    let lines = lines.map(|l| l.unwrap()).collect::<Vec<String>>();
+    let mut lines_slices = Vec::<&str>::new();
+    for l in lines.iter() {
+        lines_slices.push(l.as_str());
+    }
+
+    let mut line_details = Vec::<(String, RecordValid)>::with_capacity(lines.len());
+    for l in lines {
+        let record = get_record_valid_and_sector(l.as_str()).unwrap().1;
+        let mapped_string = simple_map(l.as_str(), record.sector_id);
+        line_details.push((mapped_string, record));
+    }
+    println!(
+        "{}",
+        line_details
+            .iter()
+            .filter(|r| r.1.valid)
+            .map(|r| r.1.sector_id)
+            .sum::<u32>()
+    );
+    let result = line_details
+        .iter()
+        .filter(|r| r.0.find("northpole").is_some())
+        .map(|r| r.1.sector_id)
+        .collect::<Vec<u32>>();
+    println!("{:?}", result[0]);
+    // println!("{:?}", line_details); //.map(|d| d.0).collect::<Vec<String>>());
 }

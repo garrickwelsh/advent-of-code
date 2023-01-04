@@ -1,0 +1,1 @@
+[{"words":["aaaaa","bbb","z","y","x"],"sector_id":123,"checksum":"abxyz"},{"words":["a","b","c","d","e","f","g","h"],"sector_id":987,"checksum":"abcde"},{"words":["not","a","real","room"],"sector_id":404,"checksum":"oarel"},{"words":["totally","real","room"],"sector_id":200,"checksum":"decoy"}]
