@@ -59,36 +59,29 @@ mod test {
         assert_eq!(26 - 1, find_first_marker_index2(&LINE4));
     }
 }
-fn find_first_marker_index1(line: &str) -> usize {
+fn find_first_marker_index(line: &str, window: usize) -> usize {
     let mut list = std::collections::LinkedList::new();
     for (i, c) in line.char_indices() {
-        if list.len() == 4 {
+        if list.len() == window {
             list.pop_back();
         }
         list.push_front(c);
-        if list.len() == 4 {
+        if list.len() == window {
             if list.iter().all_unique() {
                 return i;
             }
         }
     }
     panic!();
+}
+
+fn find_first_marker_index1(line: &str) -> usize {
+    find_first_marker_index(line, 4)
 }
 fn find_first_marker_index2(line: &str) -> usize {
-    let mut list = std::collections::LinkedList::new();
-    for (i, c) in line.char_indices() {
-        if list.len() == 14 {
-            list.pop_back();
-        }
-        list.push_front(c);
-        if list.len() == 14 {
-            if list.iter().all_unique() {
-                return i;
-            }
-        }
-    }
-    panic!();
+    find_first_marker_index(line, 14)
 }
+
 fn main() {
     use std::fs::File;
     use std::io::Read;
