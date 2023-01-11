@@ -4,7 +4,7 @@ use std::collections::HashMap;
 mod test {
     use super::*;
 
-    const TEST_INPUT: &str = "R 4
+    const TEST_INPUT_PART1: &str = "R 4
 U 4
 L 3
 D 1
@@ -15,9 +15,24 @@ R 2";
 
     #[test]
     fn find_visited_count_test() {
-        let (_, moves) = read_moves(TEST_INPUT).unwrap();
-        let visited_count = find_visited_count(&moves);
+        let (_, moves) = read_moves(TEST_INPUT_PART1).unwrap();
+        let visited_count = find_tail_visited_count::<2>(&moves);
         assert_eq!(13, visited_count);
+    }
+
+    const TEST_INPUT_PART2: &str = "R 5
+U 8
+L 8
+D 3
+R 17
+D 10
+L 25
+U 20";
+    #[test]
+    fn find_visited_count_test2() {
+        let (_, moves) = read_moves(TEST_INPUT_PART2).unwrap();
+        let visited_count = find_tail_visited_count::<10>(&moves);
+        assert_eq!(36, visited_count);
     }
 }
 
@@ -34,7 +49,7 @@ struct Move {
     spaces: i32,
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Copy)]
 struct Position {
     x: i32,
     y: i32,
@@ -63,57 +78,64 @@ fn read_moves(input: &str) -> nom::IResult<&str, Vec<Move>> {
     use nom::character::complete::newline;
     use nom::multi::separated_list0;
     let (remaining, result) = separated_list0(newline, read_move)(input)?;
-    println!("{}", remaining);
 
     Ok((remaining, result))
 }
 
-fn find_visited_count(moves: &Vec<Move>) -> usize {
-    let mut head = Position { x: 0, y: 0 };
-    let mut tail = Position { x: 0, y: 0 };
+fn move_next_knot(rope: &mut [Position], ahead: usize, behind: usize) -> bool {
+    let mut moved = false;
+    if rope[ahead].x.abs_diff(rope[behind].x) > 1 || rope[ahead].y.abs_diff(rope[behind].y) > 1 {
+        let movex = rope[ahead].x - rope[behind].x;
+        let movex = if movex > 0 {
+            1
+        } else if movex < 0 {
+            -1
+        } else {
+            0
+        };
+        let movey = rope[ahead].y - rope[behind].y;
+        let movey = if movey > 0 {
+            1
+        } else if movey < 0 {
+            -1
+        } else {
+            0
+        };
+        rope[behind].x += movex;
+        rope[behind].y += movey;
+        moved = (movex | movey) != 0;
+    }
+    moved
+}
+fn find_tail_visited_count<const N: usize>(moves: &Vec<Move>) -> usize {
+    let mut rope = [Position { x: 0, y: 0 }; N];
 
     let mut hash_map = HashMap::<Position, &str>::new();
 
-    let tstore = tail.clone();
-    hash_map.insert(tstore, "value stored");
+    // store tail starting position
+    hash_map.insert(rope[N - 1], "value stored");
 
     for m in moves {
         let mut spaces = m.spaces;
         while spaces > 0 {
             match m.direction {
-                MoveDirection::Up => head.y += 1,
-                MoveDirection::Down => head.y -= 1,
-                MoveDirection::Right => head.x += 1,
-                MoveDirection::Left => head.x -= 1,
+                MoveDirection::Up => rope[0].y += 1,
+                MoveDirection::Down => rope[0].y -= 1,
+                MoveDirection::Right => rope[0].x += 1,
+                MoveDirection::Left => rope[0].x -= 1,
                 // _ => panic!(),
             };
             spaces -= 1;
-            if head.x.abs_diff(tail.x) > 1 || head.y.abs_diff(tail.y) > 1 {
-                let movex = head.x - tail.x;
-                let movex = if movex > 0 {
-                    1
-                } else if movex < 0 {
-                    -1
-                } else {
-                    0
-                };
-                let movey = head.y - tail.y;
-                let movey = if movey > 0 {
-                    1
-                } else if movey < 0 {
-                    -1
-                } else {
-                    0
-                };
-                tail.x += movex;
-                tail.y += movey;
-                let tstore = tail.clone();
-                hash_map.insert(tstore, "value stored");
+            for i in 0..N - 1 {
+                if !move_next_knot(&mut rope, i, i + 1) {
+                    break;
+                } else if i == N - 2 {
+                    // Tail has moved then store position
+                    hash_map.insert(rope[i + 1], "Some value");
+                }
             }
         }
     }
-    // dbg!(hash_map);
-    // 0
     hash_map.len()
 }
 
@@ -129,28 +151,9 @@ fn main() {
 
     let (_, moves) = read_moves(&input).unwrap();
 
-    let tail_visited = find_visited_count(&moves);
+    let tail_visited = find_tail_visited_count::<2>(&moves);
     println!("{}", tail_visited);
 
-    // let mut x = 0i32;
-    // let mut y = 0i32;
-    // let (mut minx, mut miny, mut maxx, mut maxy) = (0i32, 0i32, 0i32, 0i32);
-
-    // println!("{:?}", moves);
-    // for m in moves {
-    //     match m.direction {
-    //         MoveDirection::Up => y += m.spaces as i32,
-    //         MoveDirection::Down => y -= m.spaces as i32,
-    //         MoveDirection::Right => x += m.spaces as i32,
-    //         MoveDirection::Left => x -= m.spaces as i32,
-    //         _ => panic!(),
-    //     };
-    //     maxx = std::cmp::max(maxx, x as i32);
-    //     minx = std::cmp::min(minx, x as i32);
-    //     maxy = std::cmp::max(maxy, y as i32);
-    //     miny = std::cmp::min(miny, y as i32);
-    // }
-    // println!("min ({}, {}) max({}, {})", minx, miny, maxx, maxy);
-
-    // println!("Hello, world!");
+    let tail_visited = find_tail_visited_count::<10>(&moves);
+    println!("{}", tail_visited);
 }
