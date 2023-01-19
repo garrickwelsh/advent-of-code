@@ -85,7 +85,6 @@ fn main() {
     use std::path::Path;
 
     let path = Path::new("input.txt");
-    // let path = Path::new("202206_rinput.txt");
     let mut file = File::open(&path).unwrap();
     let mut input = String::new();
     file.read_to_string(&mut input).unwrap();
