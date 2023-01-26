@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::VecDeque, fmt::Display};
 
 /// The wind directions to apply for tests
 const TEST_DIRECTIONS: &'static str = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
@@ -100,7 +100,7 @@ mod test {
 
     #[test]
     fn check_for_part2() {
-        let mut cm2 = CaveMap2::new(&ROCKS, TEST_DIRECTIONS);
+        let mut cm2 = CaveMap::new(&ROCKS, TEST_DIRECTIONS);
         cm2.rocks_to_fall(1_000_000_000_000);
         assert_eq!(1514285714288, cm2.current_max_height);
     }
@@ -140,25 +140,24 @@ struct Position {
 #[derive(Clone, Debug, PartialEq)]
 struct RockShape {
     shape: Vec<Position>,
-    square: Square,
 }
 
 /// A map to place rocks
 #[derive(Debug, PartialEq, Clone)]
 struct Map<const W: usize, const H: usize> {
     current_max_height: usize,
-    map: [[Square; H]; W],
+    map: Vec<VecDeque<Square>>,
     falling_rocks: Vec<RockShape>,
     current_rock: Option<RockShape>,
     rock_index: usize,
     directions: Vec<char>,
     directions_index: usize,
     num_rocks_fallen: usize,
+    map_height_offset: usize,
 }
 
 /// Large map to model how falling rocks land
-type CaveMap = Map<9, 7000>;
-type CaveMap2 = Map<9, 4_000_000_000_000>;
+type CaveMap = Map<9, 50_000>;
 
 impl<const W: usize, const H: usize> Display for Map<W, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -181,15 +180,25 @@ impl<const W: usize, const H: usize> Display for Map<W, H> {
 
 impl<const W: usize, const H: usize> Map<W, H> {
     fn new<'a>(rocks: &[[[Square; 4]; 4]; 5], directions: &'a str) -> Self {
+        let mut queue = VecDeque::<Square>::with_capacity(H);
+        for _ in 0..H {
+            queue.push_back(Square::Air);
+        }
+        let mut map = Vec::<VecDeque<Square>>::with_capacity(W);
+
+        for _ in 0..W {
+            map.push(queue.clone());
+        }
         let mut retval = Self {
             current_max_height: 0,
-            map: [[Square::Air; H]; W],
+            map,
             directions: Vec::<char>::with_capacity(directions.len()),
             falling_rocks: Vec::<RockShape>::with_capacity(5),
             current_rock: None,
             rock_index: 0,
             directions_index: 0,
             num_rocks_fallen: 0,
+            map_height_offset: 0,
         };
 
         for c in directions.chars() {
@@ -220,7 +229,7 @@ impl<const W: usize, const H: usize> Map<W, H> {
         self.rock_index = (self.rock_index + 1) % self.falling_rocks.len();
         let mut absolute_rock_shape: RockShape = base_rock_shape.clone();
 
-        let target_start = self.current_max_height + 4;
+        let target_start = self.current_max_height + 4 - self.map_height_offset;
         let xoffset = 3;
         let yoffset = target_start;
 
@@ -313,13 +322,24 @@ impl<const W: usize, const H: usize> Map<W, H> {
             self.current_max_height = rock_shape
                 .shape
                 .iter()
-                .map(|rs| rs.y)
+                .map(|rs| rs.y + self.map_height_offset)
                 .max()
                 .unwrap()
                 .max(self.current_max_height);
             self.paint_rock(&rock_shape);
             self.current_rock = None;
             self.num_rocks_fallen += 1;
+
+            let trim: isize =
+                self.current_max_height as isize - self.map_height_offset as isize - 1000;
+
+            for _ in 0..trim {
+                for x in 1..=W - 2 {
+                    self.map[x].pop_front();
+                    self.map[x].push_back(Square::Air);
+                }
+                self.map_height_offset += 1;
+            }
         } else {
             self.paint_falling_rock(&moved_rock_shape);
             self.current_rock = Some(moved_rock_shape);
@@ -344,10 +364,7 @@ impl RockShape {
                 }
             }
         }
-        Self {
-            shape,
-            square: Square::FallingRock,
-        }
+        Self { shape }
     }
 }
 
@@ -366,8 +383,10 @@ fn main() {
     let mut cm = CaveMap::new(&ROCKS, directions);
     cm.rocks_to_fall(2022);
     println!("{}", cm.current_max_height);
+    println!("{}", cm.map_height_offset);
 
-    let mut cm2 = CaveMap2::new(&ROCKS, directions);
+    let mut cm2 = CaveMap::new(&ROCKS, directions);
     cm2.rocks_to_fall(1_000_000_000_000);
     println!("{}", cm2.current_max_height);
+    println!("{}", cm.map_height_offset);
 }
