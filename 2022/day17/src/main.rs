@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, fmt::Display};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Display,
+};
 
 /// The wind directions to apply for tests
 const TEST_DIRECTIONS: &'static str = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
@@ -93,9 +96,9 @@ mod test {
 
     #[test]
     fn check_add_works() {
-        let mut cm2 = CaveMap::new(&ROCKS, TEST_DIRECTIONS);
-        cm2.rocks_to_fall(2022);
-        assert_eq!(3068, cm2.current_max_height);
+        let mut cm1 = CaveMap::new(&ROCKS, TEST_DIRECTIONS);
+        cm1.rocks_to_fall(2022);
+        assert_eq!(3068, cm1.current_max_height);
     }
 
     #[test]
@@ -154,6 +157,8 @@ struct Map<const W: usize, const H: usize> {
     directions_index: usize,
     num_rocks_fallen: usize,
     map_height_offset: usize,
+    cache: std::collections::HashMap<[usize; W], (usize, usize)>,
+    rocks_falling_repeating_sequence: Option<(usize, usize)>,
 }
 
 /// Large map to model how falling rocks land
@@ -199,6 +204,8 @@ impl<const W: usize, const H: usize> Map<W, H> {
             directions_index: 0,
             num_rocks_fallen: 0,
             map_height_offset: 0,
+            cache: HashMap::<[usize; W], (usize, usize)>::new(),
+            rocks_falling_repeating_sequence: None,
         };
 
         for c in directions.chars() {
@@ -340,17 +347,57 @@ impl<const W: usize, const H: usize> Map<W, H> {
                 }
                 self.map_height_offset += 1;
             }
+            let key = self.get_rock_pattern();
+            if self.cache.contains_key(&key) {
+                let previous_rocks_fallen = self.cache.get(&key).unwrap();
+                // println!(
+                //     "{} - {} - {}",
+                //     previous_rocks_fallen.0, previous_rocks_fallen.1, self.num_rocks_fallen
+                // );
+                self.rocks_falling_repeating_sequence = Some((
+                    self.num_rocks_fallen - previous_rocks_fallen.0,
+                    self.current_max_height - previous_rocks_fallen.1,
+                ));
+            }
+            self.cache
+                .insert(key, (self.num_rocks_fallen, self.current_max_height));
         } else {
             self.paint_falling_rock(&moved_rock_shape);
             self.current_rock = Some(moved_rock_shape);
         }
     }
 
+    fn move_by_cache_till(&mut self, total_number_to_move: usize) {
+        let Some(repeating_sequence) = self.rocks_falling_repeating_sequence else {return;};
+        let mut counter = 0;
+        while repeating_sequence.0 + counter < total_number_to_move {
+            self.current_max_height += repeating_sequence.1;
+            self.map_height_offset += repeating_sequence.1;
+            self.num_rocks_fallen += repeating_sequence.0;
+            counter += repeating_sequence.0;
+        }
+    }
+
     fn rocks_to_fall(&mut self, rocks_to_fall: usize) {
         let total_rocks_to_fall_then_stop = self.num_rocks_fallen + rocks_to_fall;
         while self.num_rocks_fallen < total_rocks_to_fall_then_stop {
+            self.move_by_cache_till(total_rocks_to_fall_then_stop - self.num_rocks_fallen);
             self.move_next();
         }
+    }
+
+    fn get_rock_pattern(&self) -> [usize; W] {
+        let mut retval = [0; W];
+        for x in 1..=W - 2 {
+            for y in (0..self.current_max_height - self.map_height_offset).rev() {
+                if self.map[x][y] == Square::Rock {
+                    retval[x] = self.current_max_height - self.map_height_offset - y;
+                }
+            }
+        }
+        retval[0] = self.rock_index;
+        retval[W - 1] = self.directions_index;
+        retval
     }
 }
 
@@ -388,5 +435,5 @@ fn main() {
     let mut cm2 = CaveMap::new(&ROCKS, directions);
     cm2.rocks_to_fall(1_000_000_000_000);
     println!("{}", cm2.current_max_height);
-    println!("{}", cm.map_height_offset);
+    println!("{}", cm2.map_height_offset);
 }
