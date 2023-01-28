@@ -1,4 +1,4 @@
-use std::{collections::HashMap, thread::JoinHandle};
+use rayon::prelude::*;
 
 #[cfg(test)]
 mod test {
@@ -9,23 +9,36 @@ mod test {
         let (_, designs) = parse_input(TEST_INPUT).unwrap();
         assert_eq!(2, designs.len());
 
-        assert_eq!(9, find_max_geode(24, &designs[0], &Resources::new()));
+        assert_eq!(9, find_max_geode_score(24, &designs[0], &Resources::new()));
+    }
+
+    #[test]
+    fn calculate_maximum_ore_production_both_designs_test() {
+        let (_, designs) = parse_input(TEST_INPUT).unwrap();
+        assert_eq!(
+            33u32,
+            designs
+                .par_iter()
+                .map(|d| find_max_geode_score(24, d, &Resources::new()))
+                .sum()
+        );
     }
 }
 
+#[cfg(test)]
 const TEST_INPUT: &str = "Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay. Each geode robot costs 2 ore and 7 obsidian.
 Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.";
 
 #[derive(Debug)]
 struct Cost {
-    ore: u8,
-    clay: u8,
-    obsidian: u8,
+    ore: u32,
+    clay: u32,
+    obsidian: u32,
 }
 
 #[derive(Debug)]
 struct Design {
-    _id: u8,
+    id: u32,
     ore: Cost,
     clay: Cost,
     obsidian: Cost,
@@ -34,16 +47,17 @@ struct Design {
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 struct Resources {
-    ore: u8,
-    clay: u8,
-    obsidian: u8,
-    geode: u8,
-    ore_robot: u8,
-    clay_robot: u8,
-    obsidian_robot: u8,
-    geode_robot: u8,
+    ore: u32,
+    clay: u32,
+    obsidian: u32,
+    geode: u32,
+    ore_robot: u32,
+    clay_robot: u32,
+    obsidian_robot: u32,
+    geode_robot: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
 enum Action {
     NoAction,
     MakeOreRobot,
@@ -96,98 +110,108 @@ impl Resources {
     }
 }
 
-fn find_max_geode(minutes: u32, design: &Design, robots_resources: &Resources) -> u32 {
-    let mut cache = HashMap::<(u32, Resources), u32>::new();
-
-    find_max_geode_step(&mut cache, minutes, design, &robots_resources)
+fn find_max_geode_score(minutes: u32, design: &Design, robots_resources: &Resources) -> u32 {
+    let retval = find_max_geode_steps(minutes, design, &robots_resources);
+    let r = retval * design.id;
+    // println!("{}", r);
+    r
 }
 
-fn find_max_geode_step(
-    cache: &mut HashMap<(u32, Resources), u32>,
-    minutes: u32,
-    design: &Design,
-    resources: &Resources,
-) -> u32 {
-    if minutes == 0 {
-        return 0;
-    }
-    // if cache.
+fn find_max_geodes(minutes: u32, design: &Design, robots_resources: &Resources) -> u32 {
+    let retval = find_max_geode_steps(minutes, design, &robots_resources);
+    retval
+}
+
+fn find_max_geode_steps(minutes: u32, design: &Design, resource: &Resources) -> u32 {
+    let mut resources = Vec::<Resources>::new();
+    resources.push(resource.clone());
+
     let mut options = Vec::<Action>::with_capacity(5);
-    options.push(Action::NoAction);
-    if design.ore.can_make_robot(&resources) {
-        options.push(Action::MakeOreRobot);
-    }
-    if design.clay.can_make_robot(&resources) {
-        options.push(Action::MakeClayRobot);
-    }
-    if design.obsidian.can_make_robot(&resources) {
-        options.push(Action::MakeObsidianRobot);
-    }
-    if design.geode.can_make_robot(&resources) {
-        options.push(Action::MakeGeodeRobot);
-    }
-    let mut max_geodes_processed: u32 = 0;
-    for i in options {
-        let mut resources = resources.clone();
-        let geodes_processed = match i {
-            Action::NoAction => {
-                resources.process_resources();
-                find_max_geode_step(cache, minutes - 1, design, &resources)
+    for _ in (0..minutes).rev() {
+        let mut next_minute = Vec::<Resources>::new();
+
+        let max_geode_robots = resources.iter().map(|r| r.geode_robot).max().unwrap();
+        let max_obsidian_robots = resources.iter().map(|r| r.obsidian_robot).max().unwrap();
+        let max_geodes = resources.iter().map(|r| r.geode).max().unwrap();
+
+        for resource in resources.into_iter().filter(|r| {
+            r.geode_robot == max_geode_robots
+                || r.obsidian_robot == max_obsidian_robots
+                || r.geode == max_geodes
+        }) {
+            if design.geode.can_make_robot(&resource) {
+                options.push(Action::MakeGeodeRobot);
             }
-            Action::MakeOreRobot => {
-                resources.make_robot(&design.ore);
-                resources.process_resources();
-                resources.ore_robot += 1;
-                find_max_geode_step(cache, minutes - 1, design, &resources)
+            if design.obsidian.can_make_robot(&resource)
+                && design.geode.obsidian > resource.obsidian_robot
+            {
+                options.push(Action::MakeObsidianRobot);
             }
-            Action::MakeClayRobot => {
-                resources.make_robot(&design.clay);
-                resources.process_resources();
-                resources.clay_robot += 1;
-                find_max_geode_step(cache, minutes - 1, design, &resources)
+            if design.clay.can_make_robot(&resource) && design.obsidian.clay > resource.clay_robot {
+                options.push(Action::MakeClayRobot);
             }
-            Action::MakeObsidianRobot => {
-                resources.make_robot(&design.obsidian);
-                resources.process_resources();
-                resources.obsidian_robot += 1;
-                find_max_geode_step(cache, minutes - 1, design, &resources)
+            if design.ore.can_make_robot(&resource) && design.clay.ore > resource.ore_robot {
+                options.push(Action::MakeOreRobot);
             }
-            Action::MakeGeodeRobot => {
-                resources.make_robot(&design.geode);
-                resources.process_resources();
-                resources.geode_robot += 1;
-                find_max_geode_step(cache, minutes - 1, design, &resources)
+            // Once we reach the max available ore we can no longer do nothing.
+            // if resource.ore < ore_limit * 2 {
+            options.push(Action::NoAction);
+            // }
+
+            for i in options.iter() {
+                let mut r = resource.clone();
+                match i {
+                    Action::MakeGeodeRobot => {
+                        r.make_robot(&design.geode);
+                        r.process_resources();
+                        r.geode_robot += 1;
+                    }
+                    Action::MakeObsidianRobot => {
+                        r.make_robot(&design.obsidian);
+                        r.process_resources();
+                        r.obsidian_robot += 1;
+                    }
+                    Action::MakeClayRobot => {
+                        r.make_robot(&design.clay);
+                        r.process_resources();
+                        r.clay_robot += 1;
+                    }
+                    Action::MakeOreRobot => {
+                        r.make_robot(&design.ore);
+                        r.process_resources();
+                        r.ore_robot += 1;
+                    }
+                    Action::NoAction => {
+                        r.process_resources();
+                    }
+                };
+                next_minute.push(r);
             }
-            _ => panic!(),
-        };
-        max_geodes_processed = geodes_processed.max(max_geodes_processed) + resources.geode as u32;
+            options.clear();
+        }
+        resources = next_minute;
     }
-    cache.insert((minutes, resources.clone()), max_geodes_processed);
-    // println!(
-    // "{} {} {} {}",
-    // resources.ore, resources.clay, resources.obsidian, resources.geode
-    // );
-    max_geodes_processed
+    resources.iter().map(|r| r.geode).max().unwrap()
 }
 
 fn parse_input_line<'a>(input: &'a str) -> nom::IResult<&'a str, Design> {
     use nom::bytes::complete::tag;
-    use nom::character::complete::u8;
+    use nom::character::complete::u32;
     use nom::sequence::delimited;
     use nom::sequence::preceded;
     use nom::sequence::tuple;
 
     let (remaining, t) = tuple((
-        preceded(tag("Blueprint "), u8),
-        preceded(tag(": Each ore robot costs "), u8),
-        preceded(tag(" ore. Each clay robot costs "), u8),
-        preceded(tag(" ore. Each obsidian robot costs "), u8),
-        preceded(tag(" ore and "), u8),
-        preceded(tag(" clay. Each geode robot costs "), u8),
-        delimited(tag(" ore and "), u8, tag(" obsidian.")),
+        preceded(tag("Blueprint "), u32),
+        preceded(tag(": Each ore robot costs "), u32),
+        preceded(tag(" ore. Each clay robot costs "), u32),
+        preceded(tag(" ore. Each obsidian robot costs "), u32),
+        preceded(tag(" ore and "), u32),
+        preceded(tag(" clay. Each geode robot costs "), u32),
+        delimited(tag(" ore and "), u32, tag(" obsidian.")),
     ))(input)?;
     let design = Design {
-        _id: t.0,
+        id: t.0,
         ore: Cost {
             ore: t.1,
             clay: 0,
@@ -230,20 +254,18 @@ fn main() {
     file.read_to_string(&mut input).unwrap();
 
     let trimmed_input = input.trim();
-    // let (_, designs) = parse_input(&input).unwrap();
-    let (_, designs) = parse_input(TEST_INPUT).unwrap();
-    let mut thandles = Vec::<JoinHandle<u32>>::new();
-    for d in designs.into_iter() {
-        thandles.push(std::thread::spawn(move || {
-            find_max_geode(24, &d, &Resources::new())
-        }));
-    }
+    let (_, designs) = parse_input(&trimmed_input).unwrap();
+    // Part 1
+    let result: u32 = designs
+        .par_iter()
+        .map(|d| find_max_geode_score(24, d, &Resources::new()))
+        .sum();
+    println!("{}", result);
 
-    let mut max_value_found: u32 = 0;
-
-    for i in thandles {
-        let j = i.join();
-        max_value_found = max_value_found.max(j.unwrap());
-    }
-    println!("{}", max_value_found);
+    // Part 2
+    let result: u32 = designs[0..=2]
+        .par_iter()
+        .map(|d| find_max_geodes(32, d, &Resources::new()))
+        .product();
+    println!("{}", result);
 }
