@@ -57,7 +57,6 @@ mod test {
     }
 }
 
-use std::cmp::Ordering::{Equal, Greater, Less};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Message {
