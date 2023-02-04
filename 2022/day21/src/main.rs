@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, };
+use std::{collections::HashMap, fmt::Display};
 
 #[cfg(test)]
 mod test {
@@ -38,6 +38,35 @@ mod test {
         assert_eq!(
             Some(152),
             mm.solved.get("root").expect("root").calculate_value()
+        );
+    }
+
+    #[test]
+    fn make_monkey_maths_part2() {
+        let (_, monkeys) = parse_input_part2(TEST_INPUT).unwrap();
+        let mut mm = MonkeyMaths::new(dbg!(monkeys));
+        println!("Solved");
+        for m in mm.solved.iter() {
+            println!("{}", m.1);
+            println!("{}", m.1.calculate_value().unwrap());
+        }
+        println!("Unresolved");
+        for m in mm.bhs.values() {
+            println!("{}", m);
+        }
+        mm.resolve_monkey_business();
+        println!("After resolve");
+        for m in mm.solved.iter() {
+            println!("{}", m.1);
+            println!("{}", m.1.calculate_value().unwrap());
+        }
+        println!("Unresolved");
+        for m in mm.bhs.values() {
+            println!("{}", m);
+        }
+        assert_eq!(
+            Some(301),
+            mm.solved.get("humn").expect("humn").calculate_value()
         );
     }
 }
@@ -123,6 +152,13 @@ impl<'a> MonkeyValue<'a> {
             _ => *self,
         }
     }
+
+    fn get_name(&self) -> Option<&'a str> {
+        match self {
+            MonkeyValue::Name(name) => Some(name),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> Monkey<'a> {
@@ -189,6 +225,132 @@ impl<'a> Monkey<'a> {
             MonkeyBusiness::Constant(c) => MonkeyBusiness::Constant(c),
         }
     }
+
+    fn reverse_equations(
+        &mut self,
+        solved: &HashMap<&'a str, Monkey>,
+    ) -> (Self, Option<&'a str>, Option<&'a str>) {
+        match self.monkey_business {
+            MonkeyBusiness::Add(lhs, rhs) => {
+                if let MonkeyValue::Name(name) = lhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Subtract(
+                                MonkeyValue::Name(self.name),
+                                rhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        rhs.get_name(),
+                    )
+                } else if let MonkeyValue::Name(name) = rhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Subtract(
+                                MonkeyValue::Name(self.name),
+                                lhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        lhs.get_name(),
+                    )
+                } else {
+                    panic!();
+                }
+            }
+            MonkeyBusiness::Multiply(lhs, rhs) => {
+                if let MonkeyValue::Name(name) = lhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Divide(
+                                MonkeyValue::Name(self.name),
+                                rhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        rhs.get_name(),
+                    )
+                } else if let MonkeyValue::Name(name) = rhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Divide(
+                                MonkeyValue::Name(self.name),
+                                lhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        lhs.get_name(),
+                    )
+                } else {
+                    panic!();
+                }
+            }
+            MonkeyBusiness::Subtract(lhs, rhs) => {
+                if let MonkeyValue::Name(name) = lhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Add(
+                                MonkeyValue::Name(self.name),
+                                rhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        rhs.get_name(),
+                    )
+                } else if let MonkeyValue::Name(name) = rhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Subtract(
+                                lhs.clone(),
+                                MonkeyValue::Name(self.name),
+                            ),
+                        },
+                        lhs.get_name(),
+                        Some(self.name),
+                    )
+                } else {
+                    panic!();
+                }
+            }
+            MonkeyBusiness::Divide(lhs, rhs) => {
+                if let MonkeyValue::Name(name) = lhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Multiply(
+                                MonkeyValue::Name(self.name),
+                                rhs.clone(),
+                            ),
+                        },
+                        Some(self.name),
+                        rhs.get_name(),
+                    )
+                } else if let MonkeyValue::Name(name) = rhs {
+                    (
+                        Monkey {
+                            name,
+                            monkey_business: MonkeyBusiness::Divide(
+                                lhs.clone(),
+                                MonkeyValue::Name(self.name),
+                            ),
+                        },
+                        lhs.get_name(),
+                        Some(self.name),
+                    )
+                } else {
+                    panic!();
+                }
+            }
+            // MonkeyBusiness::Constant(c) => MonkeyBusiness::Constant(c),
+            _ => todo!(),
+        }
+    }
 }
 
 fn parse_value<'a>(input: &'a str) -> nom::IResult<&'a str, MonkeyValue> {
@@ -232,11 +394,176 @@ fn parse_divide<'a>(input: &'a str) -> nom::IResult<&'a str, MonkeyBusiness> {
     let (remaining, t) = separated_pair(parse_value, tag(" / "), parse_value)(input)?;
     Ok((remaining, MonkeyBusiness::Divide(t.0, t.1)))
 }
+
+fn create_add_human<'a>(name: &'a str, input: (&'a str, &'a str)) -> Monkey<'a> {
+    if input.1 == "humn" {
+        Monkey {
+            name: input.1,
+            monkey_business: MonkeyBusiness::Subtract(
+                MonkeyValue::Name(name),
+                MonkeyValue::Name(input.0),
+            ),
+        }
+    } else {
+        Monkey {
+            name: input.0,
+            monkey_business: MonkeyBusiness::Subtract(
+                MonkeyValue::Name(name),
+                MonkeyValue::Name(input.1),
+            ),
+        }
+    }
+}
+fn create_subtract_human<'a>(name: &'a str, input: (&'a str, &'a str)) -> Monkey<'a> {
+    if input.1 == "humn" {
+        Monkey {
+            name: input.1,
+            monkey_business: MonkeyBusiness::Subtract(
+                MonkeyValue::Name(input.0),
+                MonkeyValue::Name(name),
+            ),
+        }
+    } else {
+        Monkey {
+            name: input.0,
+            monkey_business: MonkeyBusiness::Add(
+                MonkeyValue::Name(name),
+                MonkeyValue::Name(input.1),
+            ),
+        }
+    }
+}
+fn create_multiply_human<'a>(name: &'a str, input: (&'a str, &'a str)) -> Monkey<'a> {
+    if input.1 == "humn" {
+        Monkey {
+            name: input.1,
+            monkey_business: MonkeyBusiness::Divide(
+                MonkeyValue::Name(name),
+                MonkeyValue::Name(input.0),
+            ),
+        }
+    } else {
+        Monkey {
+            name: input.0,
+            monkey_business: MonkeyBusiness::Divide(
+                MonkeyValue::Name(input.1),
+                MonkeyValue::Name(name),
+            ),
+        }
+    }
+}
+
+fn create_divide_human<'a>(name: &'a str, input: (&'a str, &'a str)) -> Monkey<'a> {
+    if input.1 == "humn" {
+        Monkey {
+            name: input.1,
+            monkey_business: MonkeyBusiness::Divide(
+                MonkeyValue::Name(input.0),
+                MonkeyValue::Name(name),
+            ),
+        }
+    } else {
+        Monkey {
+            name: input.0,
+            monkey_business: MonkeyBusiness::Multiply(
+                MonkeyValue::Name(name),
+                MonkeyValue::Name(input.1),
+            ),
+        }
+    }
+}
 fn parse_constant<'a>(input: &'a str) -> nom::IResult<&'a str, MonkeyBusiness> {
     use nom::character::complete::i64;
     use nom::combinator::map;
 
     map(i64, |c| MonkeyBusiness::Constant(MonkeyValue::Constant(c)))(input)
+}
+
+fn parse_monkey_part2<'a>(input: &'a str) -> nom::IResult<&'a str, Vec<Monkey>> {
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
+    use nom::character::complete::alpha1;
+    use nom::sequence::separated_pair;
+    use nom::sequence::terminated;
+
+    let (remaining, name) = terminated(alpha1, tag(": "))(input)?;
+    if name == "root" {
+        let (remaining, pair) = separated_pair(alpha1, tag(" + "), alpha1)(remaining)?;
+
+        return Ok((
+            remaining,
+            vec![
+                Monkey {
+                    name: pair.0,
+                    monkey_business: MonkeyBusiness::Add(
+                        MonkeyValue::Name(pair.1),
+                        MonkeyValue::Constant(0),
+                    ),
+                },
+                Monkey {
+                    name: pair.1,
+                    monkey_business: MonkeyBusiness::Add(
+                        MonkeyValue::Name(pair.0),
+                        MonkeyValue::Constant(0),
+                    ),
+                },
+            ],
+        ));
+    }
+
+    let result = is_human(remaining);
+    if let Ok((remaining, details)) = result {
+        let human = create_human(name, details);
+        return Ok((remaining, vec![human]));
+    }
+
+    let (remaining, monkey_business) = alt((
+        parse_add,
+        parse_subtract,
+        parse_multiply,
+        parse_divide,
+        parse_constant,
+    ))(remaining)?;
+
+    if name == "humn" {
+        return Ok((remaining, Vec::<Monkey>::new()));
+    }
+
+    let monkey = Monkey {
+        name,
+        monkey_business,
+    };
+    Ok((remaining, vec![monkey]))
+}
+
+fn create_human<'a>(name: &'a str, details: (&'a str, &'a str, &'a str)) -> Monkey<'a> {
+    match details.1 {
+        " + " => create_add_human(name, (details.0, details.2)),
+        " - " => create_subtract_human(name, (details.0, details.2)),
+        " * " => create_multiply_human(name, (details.0, details.2)),
+        " / " => create_divide_human(name, (details.0, details.2)),
+        _ => panic!(),
+    }
+}
+
+fn is_human<'a>(input: &'a str) -> nom::IResult<&'a str, (&'a str, &'a str, &'a str)> {
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
+    use nom::character::complete::alpha1;
+    use nom::sequence::tuple;
+
+    alt((
+        tuple((
+            tag("humn"),
+            alt((tag(" + "), tag(" - "), tag(" * "), tag(" / "))),
+            alpha1,
+        )),
+        tuple((
+            alpha1,
+            alt((tag(" + "), tag(" - "), tag(" * "), tag(" / "))),
+            tag("humn"),
+        )),
+    ))(input)
 }
 fn parse_monkey<'a>(input: &'a str) -> nom::IResult<&'a str, Monkey> {
     use nom::branch::alt;
@@ -266,17 +593,29 @@ fn parse_input<'a>(input: &'a str) -> nom::IResult<&'a str, Vec<Monkey>> {
     separated_list0(newline, parse_monkey)(input)
 }
 
+fn parse_input_part2<'a>(input: &'a str) -> nom::IResult<&'a str, Vec<Monkey>> {
+    use nom::character::complete::newline;
+    use nom::multi::separated_list0;
+
+    let (remaining, result) = separated_list0(newline, parse_monkey_part2)(input)?;
+    dbg!(remaining);
+    Ok((
+        remaining,
+        result.into_iter().flat_map(|m| m).collect::<Vec<Monkey>>(),
+    ))
+}
+
 #[derive(Debug)]
 struct MonkeyMaths<'a> {
     solved: HashMap<&'a str, Monkey<'a>>,
-    bhs: HashMap<(Option<&'a str>, Option<&'a str>), Monkey<'a>>,
+    bhs: HashMap<(&'a str, Option<&'a str>, Option<&'a str>), Monkey<'a>>,
 }
 
 impl<'a> MonkeyMaths<'a> {
     fn new(monkeys: Vec<Monkey<'a>>) -> Self {
         let mut monkey_maths = Self {
             solved: HashMap::<&'a str, Monkey<'a>>::new(),
-            bhs: HashMap::<(Option<&'a str>, Option<&'a str>), Monkey<'a>>::new(),
+            bhs: HashMap::<(&'a str, Option<&'a str>, Option<&'a str>), Monkey<'a>>::new(),
         };
         for i in monkeys.into_iter() {
             match i.monkey_business {
@@ -302,24 +641,44 @@ impl<'a> MonkeyMaths<'a> {
     }
 
     fn resolve_monkey_business(&mut self) {
+        let mut counter = 0;
         while self.bhs.iter().count() > 0 {
-            let mut bhs = HashMap::<(Option<&'a str>, Option<&'a str>), Monkey>::new();
+            let mut bhs = HashMap::<(&'a str, Option<&'a str>, Option<&'a str>), Monkey>::new();
             std::mem::swap(&mut bhs, &mut self.bhs);
             for (key, mut monkey) in bhs.into_iter() {
-                let mut k1 = key.0;
-                let mut k2 = key.1;
+                let mut k1 = key.1;
+                let mut k2 = key.2;
+                if self.solved.contains_key(monkey.name) {
+                    let (mut rmonkey, mut ki1, mut ki2) = monkey.reverse_equations(&self.solved);
+                    k1 = ki1;
+                    k2 = ki2;
+                    monkey = rmonkey;
+                }
+
                 if self.solve_for_name(&mut monkey, k1) {
                     k1 = None;
                 }
                 if self.solve_for_name(&mut monkey, k2) {
                     k2 = None;
                 }
+                if monkey.name == "brbq" {
+                    println!("{monkey}");
+                }
+                if monkey.name == "qlfj" {
+                    println!("{monkey}");
+                }
                 if monkey.calculate_value().is_some() {
-                    self.solved.insert(monkey.name, monkey);
+                    if !self.solved.contains_key(monkey.name) {
+                        self.solved.insert(monkey.name, monkey);
+                    }
                 } else {
-                    self.bhs.insert((k1, k2), monkey);
+                    self.bhs.insert((monkey.name, k1, k2), monkey);
                 }
             }
+            if counter == 200_000 {
+                break;
+            }
+            counter += 1;
         }
     }
 
@@ -335,15 +694,15 @@ impl<'a> MonkeyMaths<'a> {
             MonkeyValue::Name(name) => {
                 k1 = Some(name);
             }
-            _ => panic!(),
+            MonkeyValue::Constant(_) => k1 = None,
         };
         match rhs {
             MonkeyValue::Name(name) => {
                 k2 = Some(name);
             }
-            _ => panic!(),
+            MonkeyValue::Constant(_) => k2 = None,
         };
-        self.bhs.insert((k1, k2), monkey);
+        self.bhs.insert((monkey.name, k1, k2), monkey);
     }
 }
 
@@ -358,12 +717,27 @@ fn main() {
     file.read_to_string(&mut input).unwrap();
 
     let trimmed_input = input.trim();
-    let (_, monkeys) = parse_input(trimmed_input).unwrap();
+    // let (_, monkeys) = parse_input(trimmed_input).unwrap();
+    // let mut mm = MonkeyMaths::new(monkeys);
+    // mm.resolve_monkey_business();
+    // println!("root - {}", mm.solved.get("root").unwrap());
+    // println!(
+    //     "root value - {}",
+    //     mm.solved.get("root").unwrap().calculate_value().unwrap()
+    // );
+
+    let (_, monkeys) = parse_input_part2(trimmed_input).unwrap();
     let mut mm = MonkeyMaths::new(monkeys);
     mm.resolve_monkey_business();
-    println!("root - {}", mm.solved.get("root").unwrap());
+    for (_, m) in mm.solved.iter() {
+        println!("{}", m);
+    }
+    for (_, m) in mm.bhs.iter() {
+        println!("{}", m);
+    }
+    println!("humn - {}", mm.solved.get("humn").unwrap());
     println!(
-        "root value - {}",
-        mm.solved.get("root").unwrap().calculate_value().unwrap()
+        "humn value - {}",
+        mm.solved.get("humn").unwrap().calculate_value().unwrap()
     );
 }
