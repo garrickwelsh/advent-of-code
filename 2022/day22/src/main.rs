@@ -4,15 +4,24 @@ mod test {
     use super::*;
 
     #[test]
-    fn import_map() {
+    fn import_map_part1() {
         let (_, (tiles, movement)) = parse_input(TEST_INPUT).unwrap();
 
-        let mut map = Map::new(tiles);
+        let mut map = Map::new_part1(tiles, 4);
         map.process_movements(&movement);
         println!("{}", map);
         println!("{:?}", map.position);
         assert_eq!(6032, map.calculate_password());
-        todo!();
+    }
+    #[test]
+    fn import_map_part2() {
+        let (_, (tiles, movement)) = parse_input(TEST_INPUT).unwrap();
+
+        let mut map = Map::new_part2(tiles, 4);
+        map.process_movements(&movement);
+        println!("{}", map);
+        println!("{:?}", map.position);
+        assert_eq!(5031, map.calculate_password());
     }
 }
 const TEST_INPUT: &str = "        ...#
@@ -46,15 +55,26 @@ enum TileType {
     Wall,
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+enum CubeFace {
+    One = 1,
+    Two = 2,
+    Three = 3,
+    Four = 4,
+    Five = 5,
+    Six = 6,
+}
+
 #[derive(Debug)]
 struct Tile {
-    next_right: Option<(usize, usize)>,
-    next_down: Option<(usize, usize)>,
-    next_left: Option<(usize, usize)>,
-    next_up: Option<(usize, usize)>,
+    next_right: Option<(Direction, (usize, usize))>,
+    next_down: Option<(Direction, (usize, usize))>,
+    next_left: Option<(Direction, (usize, usize))>,
+    next_up: Option<(Direction, (usize, usize))>,
     position: (usize, usize),
     last_movement: Option<Direction>,
     tile_type: TileType,
+    cube_face: Option<CubeFace>,
 }
 
 #[derive(Debug)]
@@ -79,6 +99,7 @@ enum MovementInstruction {
 struct Map {
     map: Vec<Vec<Tile>>,
     position: Movement,
+    face_size: usize,
 }
 
 impl Default for Tile {
@@ -91,24 +112,40 @@ impl Default for Tile {
             position: (0, 0),
             last_movement: None,
             tile_type: TileType::Empty,
+            cube_face: None,
         }
     }
 }
 
 impl Map {
-    fn new(parsed_tiles: Vec<Vec<TileType>>) -> Self {
+    fn new_part1(parsed_tiles: Vec<Vec<TileType>>, face_size: usize) -> Self {
+        Map::new(parsed_tiles, face_size, |map, tw| {
+            map.calculate_movement_part1(tw)
+        })
+    }
+
+    fn new_part2(parsed_tiles: Vec<Vec<TileType>>, face_size: usize) -> Self {
+        Map::new(parsed_tiles, face_size, |map, tw| {
+            map.calculate_movement_part2(tw)
+        })
+    }
+    fn new<F>(parsed_tiles: Vec<Vec<TileType>>, face_size: usize, f: F) -> Self
+    where
+        F: Fn(&mut Self, Vec<(Direction, usize, usize)>),
+    {
         let mut map = Self {
             map: Vec::<Vec<Tile>>::new(),
             position: Movement {
                 current_position: (0, 0),
                 current_direction: Direction::Right,
             },
+            face_size,
         };
 
         let xmax = parsed_tiles.iter().map(|m| m.len()).max().unwrap();
         let ymax = parsed_tiles.len();
 
-        dbg!(xmax, ymax);
+        // dbg!(xmax, ymax);
 
         for x in 0..xmax + 2 {
             let v = Vec::<Tile>::new();
@@ -143,66 +180,38 @@ impl Map {
                 Map::populate_easy_movement(&mut map.map, Direction::Down, x, y, &mut to_wrap);
             }
         }
-        for (direction, x, y) in to_wrap.into_iter() {
-            match direction {
-                Direction::Left => {
-                    for tx in (0..map.map.len()).rev() {
-                        match map.map[tx][y].tile_type {
-                            TileType::Empty => {}
-                            TileType::Wall => {
-                                break;
-                            }
-                            TileType::Exists => {
-                                map.map[x][y].next_left = Some((tx, y));
-                                break;
-                            }
-                        }
+        let face_size = map.face_size;
+        let mut faces_found = Vec::<(usize, usize, CubeFace)>::new();
+        for y in 0..map.map[0].len() {
+            for x in 0..map.map.len() {
+                if map.map[x][y].tile_type != TileType::Empty {
+                    let ff = faces_found
+                        .iter()
+                        .filter(|(xf, yf, _)| {
+                            x >= *xf && x < (*xf + face_size) && y >= *yf && y < (*yf + face_size)
+                        })
+                        .map(|(_, _, f)| f.clone())
+                        .collect::<Vec<CubeFace>>();
+                    debug_assert!(ff.clone().len() <= 1);
+                    if ff.clone().len() == 1 {
+                        let face = ff.iter().last().unwrap();
+                        map.map[x][y].cube_face = Some(face.clone());
+                        // dbg!((x, y, face.clone()));
+                        continue;
                     }
-                }
-                Direction::Right => {
-                    for tx in 0..map.map.len() {
-                        match map.map[tx][y].tile_type {
-                            TileType::Empty => {}
-                            TileType::Wall => {
-                                break;
-                            }
-                            TileType::Exists => {
-                                map.map[x][y].next_right = Some((tx, y));
-                                break;
-                            }
-                        }
+                    let mut next_face = CubeFace::One;
+                    if let Some(face) = faces_found.iter().map(|(_, _, f)| f).max() {
+                        println!("max_face");
+                        next_face = face.next_face();
                     }
+                    map.map[x][y].cube_face = Some(next_face.clone());
+                    // dbg!((x, y, next_face.clone()));
+                    faces_found.push((x, y, next_face));
                 }
-                Direction::Up => {
-                    for ty in (0..map.map[x].len()).rev() {
-                        match map.map[x][ty].tile_type {
-                            TileType::Empty => {}
-                            TileType::Wall => {
-                                break;
-                            }
-                            TileType::Exists => {
-                                map.map[x][y].next_up = Some((x, ty));
-                                break;
-                            }
-                        }
-                    }
-                }
-                Direction::Down => {
-                    for ty in 0..map.map[x].len() {
-                        match map.map[x][ty].tile_type {
-                            TileType::Empty => {}
-                            TileType::Wall => {
-                                break;
-                            }
-                            TileType::Exists => {
-                                map.map[x][y].next_down = Some((x, ty));
-                                break;
-                            }
-                        }
-                    }
-                }
+                // dbg!(faces_found.clone());
             }
         }
+        f(&mut map, to_wrap);
         for x in 0..map.map.len() {
             if map.map[x][1].tile_type == TileType::Exists {
                 map.position.current_position = (x, 1);
@@ -223,7 +232,7 @@ impl Map {
             match movement {
                 MovementInstruction::Move(steps) => {
                     for _ in 0..*steps {
-                        let new_position = match self.position.current_direction {
+                        let m = match self.position.current_direction {
                             Direction::Right => {
                                 self.map[self.position.current_position.0]
                                     [self.position.current_position.1]
@@ -245,11 +254,12 @@ impl Map {
                                     .next_down
                             }
                         };
-                        if let Some(position) = new_position {
+                        if let Some((direction, position)) = m {
                             self.map[self.position.current_position.0]
                                 [self.position.current_position.1]
                                 .last_movement = Some(self.position.current_direction);
                             self.position.current_position = position;
+                            self.position.current_direction = direction;
                         }
                     }
                 }
@@ -300,20 +310,148 @@ impl Map {
         if tt == TileType::Exists {
             match direction {
                 Direction::Right => {
-                    map[x][y].next_right = Some((tx, ty));
+                    map[x][y].next_right = Some((direction, (tx, ty)));
                 }
                 Direction::Left => {
-                    map[x][y].next_left = Some((tx, ty));
+                    map[x][y].next_left = Some((direction, (tx, ty)));
                 }
                 Direction::Up => {
-                    map[x][y].next_up = Some((tx, ty));
+                    map[x][y].next_up = Some((direction, (tx, ty)));
                 }
                 Direction::Down => {
-                    map[x][y].next_down = Some((tx, ty));
+                    map[x][y].next_down = Some((direction, (tx, ty)));
                 } // _ => panic!(),
             }
         } else if tt == TileType::Empty {
             to_wrap.push((direction, x, y));
+        }
+    }
+
+    fn calculate_movement_part1(&mut self, to_wrap: Vec<(Direction, usize, usize)>) {
+        for (direction, x, y) in to_wrap.into_iter() {
+            match direction {
+                Direction::Left => {
+                    for tx in (0..self.map.len()).rev() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_left = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Right => {
+                    for tx in 0..self.map.len() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_right = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Up => {
+                    for ty in (0..self.map[x].len()).rev() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_up = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Down => {
+                    for ty in 0..self.map[x].len() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_down = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn calculate_movement_part2(&mut self, to_wrap: Vec<(Direction, usize, usize)>) {
+        return;
+        todo!();
+        for (direction, x, y) in to_wrap.into_iter() {
+            match direction {
+                Direction::Left => {
+                    for tx in (0..self.map.len()).rev() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_left = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Right => {
+                    for tx in 0..self.map.len() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_right = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Up => {
+                    for ty in (0..self.map[x].len()).rev() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_up = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Down => {
+                    for ty in 0..self.map[x].len() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_down = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -324,23 +462,45 @@ impl std::fmt::Display for Map {
         for y in 0..self.map[0].len() {
             for x in 0..self.map.len() {
                 let t = &self.map[x][y];
-                match t.last_movement {
-                    None => match t.tile_type {
-                        TileType::Empty => s.push(' '),
-                        TileType::Exists => s.push('.'),
-                        TileType::Wall => s.push('#'),
-                    },
-                    Some(direction) => match direction {
-                        Direction::Left => s.push('<'),
-                        Direction::Right => s.push('>'),
-                        Direction::Up => s.push('^'),
-                        Direction::Down => s.push('v'),
-                    },
+                match t.cube_face {
+                    Some(CubeFace::One) => s.push('1'),
+                    Some(CubeFace::Two) => s.push('2'),
+                    Some(CubeFace::Three) => s.push('3'),
+                    Some(CubeFace::Four) => s.push('4'),
+                    Some(CubeFace::Five) => s.push('5'),
+                    Some(CubeFace::Six) => s.push('6'),
+                    _ => s.push(' '),
                 }
+                // match t.last_movement {
+                //     None => match t.tile_type {
+                //         TileType::Empty => s.push(' '),
+                //         TileType::Exists => s.push('.'),
+                //         TileType::Wall => s.push('#'),
+                //     },
+                //     Some(direction) => match direction {
+                //         Direction::Left => s.push('<'),
+                //         Direction::Right => s.push('>'),
+                //         Direction::Up => s.push('^'),
+                //         Direction::Down => s.push('v'),
+                //     },
+                // }
             }
             s.push('\n');
         }
         write!(f, "{}", s)
+    }
+}
+
+impl CubeFace {
+    fn next_face(&self) -> Self {
+        match *self {
+            CubeFace::One => CubeFace::Two,
+            CubeFace::Two => CubeFace::Three,
+            CubeFace::Three => CubeFace::Four,
+            CubeFace::Four => CubeFace::Five,
+            CubeFace::Five => CubeFace::Six,
+            CubeFace::Six => panic!(),
+        }
     }
 }
 
@@ -415,7 +575,7 @@ fn main() {
 
     // let trimmed_input = input.trim();
     let (_, (tile_types, movement_instructions)) = parse_input(&input).unwrap();
-    let mut map = Map::new(tile_types);
+    let mut map = Map::new_part1(tile_types, 50);
     map.process_movements(&movement_instructions);
     println!("{}", map);
     println!("{:?}", map.position);
