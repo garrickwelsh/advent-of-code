@@ -201,7 +201,6 @@ impl Map {
                     }
                     let mut next_face = CubeFace::One;
                     if let Some(face) = faces_found.iter().map(|(_, _, f)| f).max() {
-                        println!("max_face");
                         next_face = face.next_face();
                     }
                     map.map[x][y].cube_face = Some(next_face.clone());
@@ -219,6 +218,69 @@ impl Map {
             }
         }
         map
+    }
+
+    fn wrap_movement_part1(&mut self, to_wrap: Vec<(Direction, usize, usize)>) {
+        for (direction, x, y) in to_wrap.into_iter() {
+            match direction {
+                Direction::Left => {
+                    for tx in (0..self.map.len()).rev() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_left = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Right => {
+                    for tx in 0..self.map.len() {
+                        match self.map[tx][y].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_right = Some((direction, (tx, y)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Up => {
+                    for ty in (0..self.map[x].len()).rev() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_up = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+                Direction::Down => {
+                    for ty in 0..self.map[x].len() {
+                        match self.map[x][ty].tile_type {
+                            TileType::Empty => {}
+                            TileType::Wall => {
+                                break;
+                            }
+                            TileType::Exists => {
+                                self.map[x][y].next_down = Some((direction, (x, ty)));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn calculate_password(&self) -> usize {
