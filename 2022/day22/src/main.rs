@@ -55,7 +55,7 @@ enum TileType {
     Wall,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum CubeFace {
     One = 1,
     Two = 2,
@@ -131,7 +131,7 @@ impl Map {
     }
     fn new<F>(parsed_tiles: Vec<Vec<TileType>>, face_size: usize, f: F) -> Self
     where
-        F: Fn(&mut Self, Vec<(Direction, usize, usize)>),
+        F: Fn(&mut Self, Vec<(Direction, CubeFace, usize, usize)>),
     {
         let mut map = Self {
             map: Vec::<Vec<Tile>>::new(),
@@ -167,7 +167,7 @@ impl Map {
             }
         }
 
-        let mut to_wrap = Vec::<(Direction, usize, usize)>::new();
+        let mut to_wrap = Vec::<(Direction, CubeFace, usize, usize)>::new();
 
         for x in 1..=xmax {
             for y in 1..=ymax {
@@ -358,7 +358,7 @@ impl Map {
         direction: Direction,
         x: usize,
         y: usize,
-        to_wrap: &mut Vec<(Direction, usize, usize)>,
+        to_wrap: &mut Vec<(Direction, CubeFace, usize, usize)>,
     ) {
         let mut tx = x;
         let mut ty = y;
@@ -385,12 +385,12 @@ impl Map {
                 } // _ => panic!(),
             }
         } else if tt == TileType::Empty {
-            to_wrap.push((direction, x, y));
+            to_wrap.push((direction, map[x][y].cube_face.unwrap(), x, y));
         }
     }
 
-    fn calculate_movement_part1(&mut self, to_wrap: Vec<(Direction, usize, usize)>) {
-        for (direction, x, y) in to_wrap.into_iter() {
+    fn calculate_movement_part1(&mut self, to_wrap: Vec<(Direction, CubeFace, usize, usize)>) {
+        for (direction, _, x, y) in to_wrap.into_iter() {
             match direction {
                 Direction::Left => {
                     for tx in (0..self.map.len()).rev() {
@@ -452,10 +452,53 @@ impl Map {
         }
     }
 
-    fn calculate_movement_part2(&mut self, to_wrap: Vec<(Direction, usize, usize)>) {
+    fn calculate_movement_part2(&mut self, to_wrap: Vec<(Direction, CubeFace, usize, usize)>) {
+        let hm = std::collections::BTreeMap::<(CubeFace, Direction), (x, y)>::new();
+        for (direction, cube_face, x, y) in to_wrap.into_iter() {
+            match cube_face {
+                CubeFace::One => match direction {
+                    Direction::Right => {
+                        todo!();
+                    }
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+                CubeFace::Two => match direction {
+                    Direction::Right => todo!(),
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+                CubeFace::Three => match direction {
+                    Direction::Right => todo!(),
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+                CubeFace::Four => match direction {
+                    Direction::Right => todo!(),
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+                CubeFace::Five => match direction {
+                    Direction::Right => todo!(),
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+                CubeFace::Six => match direction {
+                    Direction::Right => todo!(),
+                    Direction::Left => todo!(),
+                    Direction::Up => todo!(),
+                    Direction::Down => todo!(),
+                },
+            }
+        }
         return;
         todo!();
-        for (direction, x, y) in to_wrap.into_iter() {
+        for (direction, _, x, y) in to_wrap.into_iter() {
             match direction {
                 Direction::Left => {
                     for tx in (0..self.map.len()).rev() {
